@@ -374,6 +374,13 @@ export default class {
       return;
     }
 
+    // The empty-channel grace takes authority over the shorter queue-empty
+    // disconnect timer so a just-finished song doesn't leave before the grace.
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+
     if (this.status === STATUS.PLAYING) {
       this.pause();
       this.pausedForEmptyChannel = true;

@@ -149,6 +149,8 @@ export default class {
   private readonly ageRestrictedFallbackResolver?: AgeRestrictedFallbackResolver;
   private readonly autoplayResolver?: AutoplayResolver;
   private disconnectTimer: NodeJS.Timeout | null = null;
+  private emptyChannelLeaveTimer: NodeJS.Timeout | null = null;
+  private pausedForEmptyChannel = false;
   private prefetchedMedia?: {song: QueuedSong; fetchedAt: number; mediaSource: Promise<YtDlpMediaSource | null>};
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
@@ -238,6 +240,8 @@ export default class {
   }
 
   disconnect(reason: 'disconnected' | 'stopped' = 'disconnected'): void {
+    this.clearEmptyChannelLeaveTimer();
+    this.pausedForEmptyChannel = false;
     this.voiceConnectionGeneration++;
     this.pendingConnection = undefined;
     this.prefetchedMedia = undefined;
@@ -357,6 +361,56 @@ export default class {
 
     this.stopTrackingPosition();
     this.requestPlayingMessageUpdate();
+  }
+
+  /**
+	 * Called when the voice channel loses its last human listener. Instead of
+	 * leaving immediately, pause playback (if playing) and wait out a grace
+	 * period so a brief disconnect doesn't drop the queue. Leaves only if the
+	 * channel is still empty when the grace period expires.
+	 */
+  handleEmptyVoiceChannel(graceSeconds: number): void {
+    if (this.emptyChannelLeaveTimer) {
+      return;
+    }
+
+    if (this.status === STATUS.PLAYING) {
+      this.pause();
+      this.pausedForEmptyChannel = true;
+    }
+
+    const graceMs = Math.max(0, graceSeconds) * 1000;
+    if (graceMs === 0) {
+      this.clearEmptyChannelLeaveTimer();
+      this.pausedForEmptyChannel = false;
+      this.disconnect();
+      return;
+    }
+
+    this.emptyChannelLeaveTimer = setTimeout(() => {
+      this.emptyChannelLeaveTimer = null;
+      this.pausedForEmptyChannel = false;
+      if (this.voiceConnection) {
+        this.disconnect();
+      }
+    }, graceMs);
+  }
+
+  /**
+	 * Called when a human rejoins the voice channel during the grace period.
+	 * Cancels the pending leave and resumes playback if we auto-paused.
+	 */
+  handleVoiceChannelRepopulated(): void {
+    this.clearEmptyChannelLeaveTimer();
+
+    if (this.pausedForEmptyChannel) {
+      this.pausedForEmptyChannel = false;
+      if (this.status === STATUS.PAUSED && this.getCurrent()) {
+        void this.play().catch(error => {
+          debug(`Failed to auto-resume after voice channel repopulated for guild ${this.guildId}: ${sanitizeFfmpegError(error)}`);
+        });
+      }
+    }
   }
 
   async forward(skip: number): Promise<void> {
@@ -668,6 +722,13 @@ export default class {
     return this.voiceActivityVolumeTarget ?? this.volume ?? this.defaultVolume;
   }
 
+  private clearEmptyChannelLeaveTimer(): void {
+    if (this.emptyChannelLeaveTimer) {
+      clearTimeout(this.emptyChannelLeaveTimer);
+      this.emptyChannelLeaveTimer = null;
+    }
+  }
+
   private async connectWithRetries(channel: VoiceChannel, generation: number): Promise<void> {
     const settings = await getGuildSettings(this.guildId);
     if (generation !== this.voiceConnectionGeneration) {
@@ -878,6 +939,10 @@ export default class {
       clearInterval(this.disconnectTimer);
       this.disconnectTimer = null;
     }
+
+    // A manual play/resume overrides a pending empty-channel leave.
+    this.clearEmptyChannelLeaveTimer();
+    this.pausedForEmptyChannel = false;
 
     // Resume from paused state
     if (this.status === STATUS.PAUSED

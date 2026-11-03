@@ -5,6 +5,7 @@ import {TYPES} from '../types.js';
 import PlayerManager from '../managers/player.js';
 import {getSizeWithoutBots} from '../utils/channels.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
+import {EMPTY_CHANNEL_LEAVE_GRACE_SECONDS} from '../utils/constants.js';
 
 export default async (oldState: VoiceState, newState: VoiceState): Promise<void> => {
   const playerManager = container.get<PlayerManager>(TYPES.Managers.Player);
@@ -30,7 +31,21 @@ export default async (oldState: VoiceState, newState: VoiceState): Promise<void>
   }
 
   const voiceChannel = newState.guild.channels.cache.get(channelId) as VoiceChannel | undefined;
-  if (!voiceChannel || (getSizeWithoutBots(voiceChannel) === 0 && leaveIfNoListeners)) {
+  if (!voiceChannel) {
+    // Channel no longer exists; leave immediately.
     player.disconnect();
+    return;
+  }
+
+  const listeners = getSizeWithoutBots(voiceChannel);
+  if (listeners === 0) {
+    if (leaveIfNoListeners) {
+      // Don't drop the queue on a brief disconnect: pause and wait out a grace
+      // period, leaving only if nobody returns.
+      player.handleEmptyVoiceChannel(EMPTY_CHANNEL_LEAVE_GRACE_SECONDS);
+    }
+  } else {
+    // Someone is (still) listening; cancel any pending leave and auto-resume.
+    player.handleVoiceChannelRepopulated();
   }
 };

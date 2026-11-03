@@ -6,6 +6,13 @@ import getProgressBar from './get-progress-bar.js';
 import {prettyTime} from './time.js';
 import {truncate} from './string.js';
 
+// garftheholy theme palette
+const THEME = {
+  playing: 0xD4A847, // gold
+  paused: 0x6B5836, // dark parchment / bronze
+  night: 0x1A1410, // deep chapel background
+} as const;
+
 const getMaxSongTitleLength = (title: string) => {
   // eslint-disable-next-line no-control-regex
   const nonASCII = /[^\x00-\x7F]+/;
@@ -73,14 +80,14 @@ export const buildPlayingMessageEmbed = (player: Player): EmbedBuilder => {
   const {artist, thumbnailUrl, requestedBy} = currentlyPlaying;
   const message = new EmbedBuilder();
   message
-    .setColor(player.status === STATUS.PLAYING ? 'DarkGreen' : 'DarkRed')
-    .setTitle(player.status === STATUS.PLAYING ? 'Now Playing' : 'Paused')
+    .setColor(player.status === STATUS.PLAYING ? THEME.playing : THEME.paused)
+    .setTitle(player.status === STATUS.PLAYING ? '✦ Now Playing' : '✦ Paused')
     .setDescription(`
       **${getSongTitle(currentlyPlaying)}**
       Requested by: <@${requestedBy}>\n
       ${getPlayerUI(player)}
     `);
-  setBoundedFooter(message, `Source: ${artist}`);
+  setBoundedFooter(message, `Source: ${artist} • garftheholy`);
 
   if (thumbnailUrl) {
     message.setThumbnail(thumbnailUrl);
@@ -144,8 +151,8 @@ export const buildQueueEmbed = (player: Player, page: number, pageSize: number):
   }
 
   message
-    .setTitle(player.status === STATUS.PLAYING ? `Now Playing ${player.loopCurrentSong ? '(loop on)' : ''}` : 'Queued songs')
-    .setColor(player.status === STATUS.PLAYING ? 'DarkGreen' : 'NotQuiteBlack')
+    .setTitle(player.status === STATUS.PLAYING ? `✦ Now Playing ${player.loopCurrentSong ? '(loop on)' : ''}` : '✦ Queued Songs')
+    .setColor(player.status === STATUS.PLAYING ? THEME.playing : THEME.night)
     .setDescription(description)
     .addFields([{name: 'In queue', value: getQueueInfo(player), inline: true}, {
       name: 'Total length', value: `${totalLength > 0 ? prettyTime(totalLength) : '-'}`, inline: true,

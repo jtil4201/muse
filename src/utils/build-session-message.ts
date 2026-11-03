@@ -80,7 +80,7 @@ const embedTextLength = (embed: EmbedBuilder): number => {
     + fields.reduce((total, field) => total + field.name.length + field.value.length, 0);
 };
 
-const historyEmbed = (title: string) => new EmbedBuilder().setColor(0x365c65).setTitle(title);
+const historyEmbed = (title: string) => new EmbedBuilder().setColor(0xD4A847).setTitle(title);
 
 /** Fill the current message before adding another, keeping each entry intact. */
 const appendHistory = (messages: SessionMessagePayload[], session: ListeningSessionRecord): SessionMessagePayload[] => {

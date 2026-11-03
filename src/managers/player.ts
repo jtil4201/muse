@@ -65,11 +65,16 @@ export default class {
       return [];
     }
 
-    const relatedIds = await getYouTubeRelatedVideoIds(song.url, 12);
-    const picks = relatedIds.slice(0, Math.max(1, this.config.AUTOPLAY_QUEUE_COUNT));
+    const wanted = Math.max(1, this.config.AUTOPLAY_QUEUE_COUNT);
+    // Fetch extra Mix IDs so dropped/failed tracks don't shrink the batch.
+    const relatedIds = await getYouTubeRelatedVideoIds(song.url, Math.max(12, wanted * 2));
     const songs: QueuedSong[] = [];
 
-    for (const videoId of picks) {
+    for (const videoId of relatedIds) {
+      if (songs.length >= wanted) {
+        break;
+      }
+
       try {
         // eslint-disable-next-line no-await-in-loop
         const [results] = await this.getSongs.getSongs(`https://www.youtube.com/watch?v=${videoId}`, 1, false);

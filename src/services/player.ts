@@ -1518,25 +1518,54 @@ export default class {
       return false;
     }
 
-    const current = this.getCurrent();
-    if (!current) {
+    const seeds = this.getAutoplaySeeds();
+    if (seeds.length === 0) {
       return false;
     }
 
-    try {
-      const songs = await this.autoplayResolver(current);
-      if (songs.length === 0) {
-        return false;
+    // Skip tracks already queued/played so the radio doesn't loop on repeats.
+    const existingUrls = new Set(this.queue.map(song => song.url));
+
+    for (const seed of seeds) {
+      let songs: QueuedSong[];
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        songs = await this.autoplayResolver(seed);
+      } catch {
+        continue;
       }
 
-      for (const song of songs) {
+      const fresh = songs.filter(song => !existingUrls.has(song.url));
+      if (fresh.length === 0) {
+        continue;
+      }
+
+      for (const song of fresh) {
+        existingUrls.add(song.url);
         this.add(song);
       }
 
       return true;
-    } catch {
-      return false;
     }
+
+    return false;
+  }
+
+  // Recent YouTube songs (newest first) used to seed autoplay, so a single
+  // dead-end Mix doesn't end the radio.
+  private getAutoplaySeeds(): QueuedSong[] {
+    const seeds: QueuedSong[] = [];
+    const seen = new Set<string>();
+
+    for (let i = this.queuePosition; i >= 0 && seeds.length < 4; i--) {
+      const song = this.queue[i];
+      if (song && song.source === MediaSource.Youtube && song.url.length === 11 && !seen.has(song.url)) {
+        seen.add(song.url);
+        seeds.push(song);
+      }
+    }
+
+    return seeds;
   }
 
   private async finishQueue(): Promise<void> {

@@ -30,6 +30,9 @@ export interface QueuedSong extends SongMetadata {
 
 export type AgeRestrictedFallbackResolver = (song: QueuedSong) => Promise<SongMetadata | null>;
 
+// Returns related tracks to keep playback going when the queue runs out (autoplay/radio).
+export type AutoplayResolver = (song: QueuedSong) => Promise<QueuedSong[]>;
+
 export enum STATUS {
   PLAYING,
   PAUSED,

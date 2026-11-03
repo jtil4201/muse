@@ -28,6 +28,7 @@ import {
   MediaSource,
   STATUS,
   type AgeRestrictedFallbackResolver,
+  type AutoplayResolver,
   type PlayerEvents,
   type QueuedPlaylist,
   type QueuedSong,
@@ -146,6 +147,7 @@ export default class {
   private positionInSeconds = 0;
   private readonly fileCache: FileCacheProvider;
   private readonly ageRestrictedFallbackResolver?: AgeRestrictedFallbackResolver;
+  private readonly autoplayResolver?: AutoplayResolver;
   private disconnectTimer: NodeJS.Timeout | null = null;
   private prefetchedMedia?: {song: QueuedSong; fetchedAt: number; mediaSource: Promise<YtDlpMediaSource | null>};
 
@@ -161,10 +163,12 @@ export default class {
     ageRestrictedFallbackResolver?: AgeRestrictedFallbackResolver,
     playingMessageUpdateIntervalSeconds = DEFAULT_PLAYING_MESSAGE_UPDATE_INTERVAL_SECONDS,
     public readonly listeningSession?: ListeningSession,
+    autoplayResolver?: AutoplayResolver,
   ) {
     this.fileCache = fileCache;
     this.guildId = guildId;
     this.ageRestrictedFallbackResolver = ageRestrictedFallbackResolver;
+    this.autoplayResolver = autoplayResolver;
     this.playingMessageUpdateIntervalSeconds = playingMessageUpdateIntervalSeconds;
     this.playbackAttempts = new PlaybackAttemptTracker(() => ({
       currentSong: this.getCurrent(),
@@ -1412,8 +1416,11 @@ export default class {
 
     if (newState.status === AudioPlayerStatus.Idle && this.status === STATUS.PLAYING) {
       if (!this.canGoForward(1)) {
-        await this.finishQueue();
-        return;
+        const didAutoplay = await this.tryAutoplay();
+        if (!didAutoplay) {
+          await this.finishQueue();
+          return;
+        }
       }
 
       await this.forward(1);
@@ -1430,6 +1437,33 @@ export default class {
           embeds: [buildPlayingMessageEmbed(this)],
         });
       }
+    }
+  }
+
+  // Keep playback going with related tracks when the queue runs dry (autoplay/radio).
+  private async tryAutoplay(): Promise<boolean> {
+    if (!this.autoplayResolver) {
+      return false;
+    }
+
+    const current = this.getCurrent();
+    if (!current) {
+      return false;
+    }
+
+    try {
+      const songs = await this.autoplayResolver(current);
+      if (songs.length === 0) {
+        return false;
+      }
+
+      for (const song of songs) {
+        this.add(song);
+      }
+
+      return true;
+    } catch {
+      return false;
     }
   }
 

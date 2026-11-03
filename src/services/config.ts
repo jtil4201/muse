@@ -34,6 +34,8 @@ const CONFIG_MAP = {
   ),
   YT_DLP_PATH: firstNonEmpty(process.env.YT_DLP_PATH, process.env.MUSE_BUNDLED_YT_DLP_PATH) ?? 'yt-dlp',
   YT_DLP_AUTO_UPDATE: process.env.YT_DLP_AUTO_UPDATE === 'true',
+  ENABLE_AUTOPLAY: process.env.ENABLE_AUTOPLAY === 'true',
+  AUTOPLAY_QUEUE_COUNT: parseInt(process.env.AUTOPLAY_QUEUE_COUNT ?? '1', 10),
 } as const;
 
 const BOT_ACTIVITY_TYPE_MAP = {
@@ -62,6 +64,8 @@ export default class Config {
   readonly PLAYING_MESSAGE_UPDATE_INTERVAL_SECONDS!: number;
   readonly YT_DLP_PATH!: string;
   readonly YT_DLP_AUTO_UPDATE!: boolean;
+  readonly ENABLE_AUTOPLAY!: boolean;
+  readonly AUTOPLAY_QUEUE_COUNT!: number;
 
   constructor() {
     for (const [key, value] of Object.entries(CONFIG_MAP)) {

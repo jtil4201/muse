@@ -398,6 +398,26 @@ export const getYouTubeMediaSource = async (videoIdOrUrl: string): Promise<YtDlp
   toMediaSource(await extractMedia(toYouTubeWatchUrl(videoIdOrUrl)))
 );
 
+// Expand a video's YouTube Mix (radio) into related video IDs for autoplay.
+export const getYouTubeRelatedVideoIds = async (videoId: string, limit: number): Promise<string[]> => {
+  const mixUrl = `https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}`;
+  const {stdout} = await execa(getExecutable(), [
+    '--flat-playlist',
+    '--print',
+    '%(id)s',
+    '--playlist-end',
+    String(Math.max(1, Math.floor(limit))),
+    '--no-warnings',
+    '--no-cache-dir',
+    mixUrl,
+  ], {timeout: YT_DLP_EXTRACT_TIMEOUT_MS});
+
+  return stdout
+    .split('\n')
+    .map(line => line.trim())
+    .filter(id => id.length === 11 && id !== videoId);
+};
+
 export const getSoundCloudMetadata = async (url: string, playlistLimit: number): Promise<SoundCloudMetadata> => (
   extractMedia(url, Math.max(1, Math.floor(playlistLimit)), false)
 );

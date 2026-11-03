@@ -102,6 +102,54 @@ export default class {
       : [];
   }
 
+  // Builds a queue of individual tracks for a genre/mood query. Searches the
+  // Music category and drops compilations (over maxTrackLength) and clips
+  // (under minTrackLength) so the result is real songs, not one long upload.
+  async searchMany(query: string, count: number, options: {
+    minTrackLength?: number;
+    maxTrackLength?: number;
+  } = {}): Promise<SongMetadata[]> {
+    if (count < 1) {
+      return [];
+    }
+
+    const minTrackLength = options.minTrackLength ?? 60;
+    const maxTrackLength = options.maxTrackLength ?? 20 * 60;
+    const maxResults = Math.min(50, Math.max(count * 2, 15));
+
+    const ids = await this.searchVideoIDs(query, {videoCategoryId: '10', maxResults});
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const videos = await this.getVideosByID(ids);
+    const byId = new Map(videos.map(video => [video.id, video]));
+
+    const songs: SongMetadata[] = [];
+    for (const id of ids) {
+      const video = byId.get(id);
+      if (!video || video.snippet.liveBroadcastContent === 'live') {
+        continue;
+      }
+
+      if (video.contentDetails.contentRating?.ytRating === 'ytAgeRestricted') {
+        continue;
+      }
+
+      const [song] = this.getMetadataFromVideo({video, shouldSplitChapters: false});
+      if (!song || song.length < minTrackLength || song.length > maxTrackLength) {
+        continue;
+      }
+
+      songs.push(song);
+      if (songs.length >= count) {
+        break;
+      }
+    }
+
+    return songs;
+  }
+
   async findAudioFallback(song: SongMetadata): Promise<SongMetadata | null> {
     if (song.source !== MediaSource.Youtube || song.isLive) {
       return null;
@@ -324,12 +372,12 @@ export default class {
     return chapters;
   }
 
-  private async searchVideoIDs(query: string, options: {videoCategoryId?: string} = {}): Promise<string[]> {
+  private async searchVideoIDs(query: string, options: {videoCategoryId?: string; maxResults?: number} = {}): Promise<string[]> {
     const searchParams: Record<string, string> = {
       part: 'snippet',
       q: query,
       type: 'video',
-      maxResults: '10',
+      maxResults: String(Math.min(50, Math.max(1, options.maxResults ?? 10))),
     };
 
     if (options.videoCategoryId) {

@@ -8,15 +8,24 @@ import SpotifyAPI, {SpotifyTrack} from './spotify-api.js';
 import {URL} from 'node:url';
 import {getSoundCloudMetadata, YtDlpMediaUnavailableError} from '../utils/yt-dlp.js';
 import pLimit from 'p-limit';
+import Config from './config.js';
+import {isGenreQuery} from '../utils/genre-query.js';
 
 @injectable()
 export default class {
   private readonly youtubeAPI: YoutubeAPI;
   private readonly spotifyAPI?: SpotifyAPI;
 
-  constructor(@inject(TYPES.Services.YoutubeAPI) youtubeAPI: YoutubeAPI, @inject(TYPES.Services.SpotifyAPI) @optional() spotifyAPI?: SpotifyAPI) {
+  private readonly config?: Config;
+
+  constructor(
+    @inject(TYPES.Services.YoutubeAPI) youtubeAPI: YoutubeAPI,
+    @inject(TYPES.Services.SpotifyAPI) @optional() spotifyAPI?: SpotifyAPI,
+    @inject(TYPES.Config) @optional() config?: Config,
+  ) {
     this.youtubeAPI = youtubeAPI;
     this.spotifyAPI = spotifyAPI;
+    this.config = config;
   }
 
   async getSongs(query: string, playlistLimit: number, shouldSplitChapters: boolean): Promise<[SongMetadata[], string]> {
@@ -34,6 +43,14 @@ export default class {
     const supportedProtocols = ['http:', 'https:', 'spotify:'];
 
     if (!url || !supportedProtocols.includes(url.protocol)) {
+      // A genre/mood query ("rock", "80s", "chill lofi") builds a queue of
+      // individual tracks instead of the single top hit, which is usually a long
+      // compilation. This also lets skip and autoplay behave per-song.
+      const genreMix = await this.tryBuildGenreQueue(query, playlistLimit);
+      if (genreMix) {
+        return genreMix;
+      }
+
       // Not a supported provider URL, so search YouTube as free text.
       const songs = await this.youtubeVideoSearch(query, shouldSplitChapters);
 
@@ -110,6 +127,25 @@ export default class {
 
   private async youtubeVideoSearch(query: string, shouldSplitChapters: boolean): Promise<SongMetadata[]> {
     return this.youtubeAPI.search(query, shouldSplitChapters);
+  }
+
+  // Returns a [songs, message] tuple for a genre/mood query, or null to fall
+  // back to the normal single-video search (feature off, not a genre, or the
+  // mix came up empty).
+  private async tryBuildGenreQueue(query: string, playlistLimit: number): Promise<[SongMetadata[], string] | null> {
+    if (!this.config?.ENABLE_SMART_QUEUE || !isGenreQuery(query)) {
+      return null;
+    }
+
+    const count = Math.max(1, Math.min(this.config.SMART_QUEUE_SONG_COUNT, playlistLimit));
+    const mix = await this.youtubeAPI.searchMany(query, count);
+
+    if (mix.length <= 1) {
+      return null;
+    }
+
+    const playlist = {title: `${query} mix`, source: `genre:${query}`};
+    return [mix.map(song => ({...song, playlist})), `built a ${mix.length}-song ${query} mix`];
   }
 
   private async youtubeVideo(url: string, shouldSplitChapters: boolean): Promise<SongMetadata[]> {

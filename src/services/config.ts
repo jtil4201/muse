@@ -36,6 +36,8 @@ const CONFIG_MAP = {
   YT_DLP_AUTO_UPDATE: process.env.YT_DLP_AUTO_UPDATE === 'true',
   ENABLE_AUTOPLAY: process.env.ENABLE_AUTOPLAY === 'true',
   AUTOPLAY_QUEUE_COUNT: parseInt(process.env.AUTOPLAY_QUEUE_COUNT ?? '1', 10),
+  ENABLE_SMART_QUEUE: process.env.ENABLE_SMART_QUEUE !== 'false',
+  SMART_QUEUE_SONG_COUNT: parseInt(process.env.SMART_QUEUE_SONG_COUNT ?? '10', 10),
 } as const;
 
 const BOT_ACTIVITY_TYPE_MAP = {
@@ -66,6 +68,8 @@ export default class Config {
   readonly YT_DLP_AUTO_UPDATE!: boolean;
   readonly ENABLE_AUTOPLAY!: boolean;
   readonly AUTOPLAY_QUEUE_COUNT!: number;
+  readonly ENABLE_SMART_QUEUE!: boolean;
+  readonly SMART_QUEUE_SONG_COUNT!: number;
 
   constructor() {
     for (const [key, value] of Object.entries(CONFIG_MAP)) {

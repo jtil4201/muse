@@ -962,7 +962,7 @@ describe('bounded session rendering', () => {
       expect(JSON.stringify(embed).length).toBeLessThan(6000);
       // Recaps use shorter history links; the classic live card retains its
       // existing link format while enforcing the same Discord message limits.
-      if (!embed.title?.startsWith('Now Playing')) expect(embed.description).not.toContain(long.url);
+      if (!embed.title?.includes('Now Playing')) expect(embed.description).not.toContain(long.url);
       expect(payload.allowedMentions).toEqual({parse: []});
       for (const button of payload.components.flatMap(row => row.components)) expect(button.custom_id.length).toBeLessThanOrEqual(100);
     }

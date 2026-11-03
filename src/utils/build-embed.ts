@@ -6,11 +6,11 @@ import getProgressBar from './get-progress-bar.js';
 import {prettyTime} from './time.js';
 import {truncate} from './string.js';
 
-// garftheholy theme palette
+// Theme palette (garftheholy)
 const THEME = {
-  playing: 0xD4A847, // gold
-  paused: 0x6B5836, // dark parchment / bronze
-  night: 0x1A1410, // deep chapel background
+  playing: 0xD4A847, // Gold
+  paused: 0x6B5836, // Dark parchment / bronze
+  night: 0x1A1410, // Deep chapel background
 } as const;
 
 const getMaxSongTitleLength = (title: string) => {

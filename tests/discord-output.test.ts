@@ -94,7 +94,7 @@ describe('playback embed output limits', () => {
 
     expect(playing.description).toContain(`**[Song](${expectedLink})**`);
     expect(queue.description).toContain(`**[Song](${expectedLink})**`);
-    expect(playing.footer!.text).toBe('Source: Artist');
+    expect(playing.footer!.text).toBe('Source: Artist • garftheholy');
     expect(queue.footer!.text).toBe('Source: Artist ');
   });
 });

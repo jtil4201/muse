@@ -1515,11 +1515,14 @@ export default class {
   // Keep playback going with related tracks when the queue runs dry (autoplay/radio).
   private async tryAutoplay(): Promise<boolean> {
     if (!this.autoplayResolver) {
+      console.log('[autoplay] skipped: no resolver (ENABLE_AUTOPLAY off?)');
       return false;
     }
 
     const seeds = this.getAutoplaySeeds();
+    console.log(`[autoplay] triggered; seeds=${seeds.length} [${seeds.map(s => `${s.source}:${s.url}`).join(', ')}]`);
     if (seeds.length === 0) {
+      console.log('[autoplay] no YouTube seeds in recent queue; nothing to seed radio from');
       return false;
     }
 
@@ -1531,11 +1534,13 @@ export default class {
       try {
         // eslint-disable-next-line no-await-in-loop
         songs = await this.autoplayResolver(seed);
-      } catch {
+      } catch (error) {
+        console.error(`[autoplay] seed ${seed.url} resolve threw:`, error instanceof Error ? error.message : error);
         continue;
       }
 
       const fresh = songs.filter(song => !existingUrls.has(song.url));
+      console.log(`[autoplay] seed ${seed.url} -> ${songs.length} resolved, ${fresh.length} fresh`);
       if (fresh.length === 0) {
         continue;
       }
@@ -1545,9 +1550,11 @@ export default class {
         this.add(song);
       }
 
+      console.log(`[autoplay] added ${fresh.length} track(s); radio continues`);
       return true;
     }
 
+    console.log('[autoplay] all seeds exhausted with no fresh tracks');
     return false;
   }
 

@@ -62,14 +62,24 @@ export default class {
   // Builds related YouTube tracks (via the video's Mix) to extend the queue when autoplay is on.
   private async resolveAutoplay(song: QueuedSong): Promise<QueuedSong[]> {
     if (song.source !== MediaSource.Youtube || song.url.length !== 11) {
+      console.log(`[autoplay] seed rejected: source=${song.source} urlLen=${song.url.length} (need Youtube + 11-char id)`);
       return [];
     }
 
     const wanted = Math.max(1, this.config.AUTOPLAY_QUEUE_COUNT);
     // Fetch extra Mix IDs so dropped/failed tracks don't shrink the batch.
-    const relatedIds = await getYouTubeRelatedVideoIds(song.url, Math.max(12, wanted * 2));
+    let relatedIds: string[];
+    try {
+      relatedIds = await getYouTubeRelatedVideoIds(song.url, Math.max(12, wanted * 2));
+    } catch (error) {
+      console.error(`[autoplay] mix expansion failed for ${song.url}:`, error instanceof Error ? error.message : error);
+      return [];
+    }
+
+    console.log(`[autoplay] mix for ${song.url} -> ${relatedIds.length} related ids`);
     const songs: QueuedSong[] = [];
 
+    let failed = 0;
     for (const videoId of relatedIds) {
       if (songs.length >= wanted) {
         break;
@@ -82,11 +92,15 @@ export default class {
         if (metadata) {
           songs.push({...metadata, addedInChannelId: song.addedInChannelId, requestedBy: song.requestedBy});
         }
-      } catch {
-        // Skip a related track that fails to resolve.
+      } catch (error) {
+        failed++;
+        if (failed <= 2) {
+          console.error(`[autoplay] related ${videoId} resolve failed:`, error instanceof Error ? error.message : error);
+        }
       }
     }
 
+    console.log(`[autoplay] resolved ${songs.length}/${relatedIds.length} related tracks (${failed} failed)`);
     return songs;
   }
 }

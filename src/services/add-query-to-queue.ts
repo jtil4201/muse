@@ -167,6 +167,75 @@ export default class AddQueryToQueue {
     }
   }
 
+  // Queue a list of already-resolved songs (e.g. a saved playlist) with a single reply.
+  public async addResolvedSongsToQueue({songs, interaction, label, shuffleAdditions = false}: {
+    songs: SongMetadata[];
+    interaction: ChatInputCommandInteraction;
+    label: string;
+    shuffleAdditions?: boolean;
+  }): Promise<void> {
+    const guildId = interaction.guild!.id;
+    const player = this.playerManager.get(guildId);
+    const currentQueueEntryId = player.getCurrentQueueEntryId();
+    const wasPlayingSong = currentQueueEntryId !== null;
+
+    const [targetVoiceChannel] = getMemberVoiceChannel(interaction.member as GuildMember) ?? getMostPopularVoiceChannel(interaction.guild!);
+
+    await interaction.deferReply({ephemeral: false});
+
+    let newSongs = songs;
+    if (newSongs.length === 0) {
+      throw new Error('that playlist is empty');
+    }
+
+    if (shuffleAdditions) {
+      newSongs = shuffle(uniqueSongs(newSongs));
+    }
+
+    const queuedSongs = newSongs.map(song => ({
+      ...song,
+      addedInChannelId: interaction.channel!.id,
+      requestedBy: interaction.member!.user.id,
+    }));
+
+    const needsConnection = player.voiceConnection === null;
+    if (needsConnection) {
+      const connection = player.connect(targetVoiceChannel);
+      player.prepareAudio(player.getCurrent() ?? queuedSongs[0]);
+      await connection;
+    } else {
+      await player.ensureVoiceConnectionReady();
+    }
+
+    queuedSongs.forEach(song => {
+      player.add(song, {immediate: false});
+    });
+
+    let statusMsg = '';
+    if (needsConnection) {
+      await player.play();
+      if (wasPlayingSong) {
+        statusMsg = 'resuming playback';
+      }
+    } else if (player.status === STATUS.IDLE) {
+      await player.play();
+    }
+
+    if (!player.getCurrent()) {
+      throw new Error('no playable songs found');
+    }
+
+    const suffix = statusMsg === '' ? '' : ` (${statusMsg})`;
+    const content = `u betcha, queued **${newSongs.length}** song${newSongs.length === 1 ? '' : 's'} from ${label}${suffix}`;
+    const receipt = interaction.editReply({content, allowedMentions: {parse: []}});
+    const publication = this.sessionPlayer.attachToReply(player, interaction.channel as GuildTextBasedChannel, receipt).then(() => '', () => {
+      console.warn(`Could not publish the session player for guild ${guildId}.`);
+      return '';
+    });
+    await receipt;
+    await publication;
+  }
+
   private async skipNonMusicSegments(song: SongMetadata) {
     if (!this.sponsorBlock
           || (this.sponsorBlockDisabledUntil && new Date() < this.sponsorBlockDisabledUntil)

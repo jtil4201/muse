@@ -97,3 +97,42 @@ model ListeningSessionMessage {
 
   @@id([sessionId, position])
 }
+
+model Playlist {
+  id        Int             @id @default(autoincrement())
+  ownerId   String
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  songs     PlaylistSong[]
+  shares    PlaylistShare[]
+
+  @@unique([ownerId, name])
+}
+
+model PlaylistSong {
+  id         Int      @id @default(autoincrement())
+  playlistId Int
+  position   Int
+  title      String
+  artist     String   @default("")
+  url        String
+  source     Int
+  length     Float    @default(0)
+  thumbnail  String?
+  query      String   @default("")
+  createdAt  DateTime @default(now())
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  @@index([playlistId])
+}
+
+model PlaylistShare {
+  id           Int      @id @default(autoincrement())
+  playlistId   Int
+  sharedWithId String
+  createdAt    DateTime @default(now())
+  playlist     Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, sharedWithId])
+}

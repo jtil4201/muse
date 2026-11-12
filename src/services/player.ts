@@ -240,6 +240,7 @@ export default class {
   }
 
   disconnect(reason: 'disconnected' | 'stopped' = 'disconnected'): void {
+    console.log(`[leave] disconnect() reason=${reason} status=${this.status} via: ${new Error().stack?.split('\n').slice(2, 4).map(s => s.trim()).join(' <- ')}`);
     this.clearEmptyChannelLeaveTimer();
     this.pausedForEmptyChannel = false;
     this.voiceConnectionGeneration++;
@@ -370,6 +371,7 @@ export default class {
 	 * channel is still empty when the grace period expires.
 	 */
   handleEmptyVoiceChannel(graceSeconds: number): void {
+    console.log(`[leave] handleEmptyVoiceChannel grace=${graceSeconds} status=${this.status}`);
     if (this.emptyChannelLeaveTimer) {
       return;
     }
@@ -1378,6 +1380,7 @@ export default class {
   }
 
   private async onVoiceConnectionDisconnect(voiceConnection: VoiceConnection): Promise<void> {
+    console.log(`[leave] voice connection dropped for guild ${this.guildId}, attempting recovery`);
     await recoverVoiceConnection(voiceConnection, {
       isCurrent: candidate => this.voiceConnection === candidate,
       dispose: candidate => {
@@ -1465,6 +1468,7 @@ export default class {
   }
 
   private async onAudioPlayerIdle(_oldState: AudioPlayerState, newState: AudioPlayerState): Promise<void> {
+    console.log(`[leave] idle: newStatus=${newState.status} playerStatus=${this.status} canGoForward=${this.canGoForward(1)} pausedForEmpty=${this.pausedForEmptyChannel}`);
     if (newState.status === AudioPlayerStatus.Idle && this.status === STATUS.PLAYING) {
       this.listeningSession?.endTrack('completed');
     }

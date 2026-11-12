@@ -20,6 +20,7 @@ Muse is a **highly-opinionated midwestern self-hosted** Discord music bot **that
 - 📋 No vote-to-skip - this is anarchy, not a democracy
 - ↔️ Autoconverts playlists / artists / albums / songs from Spotify
 - ⭐ Users can save favorite queries for reuse
+- 🎵 Personal, private playlists per user, shareable with specific people
 - 1️⃣ Muse instance supports multiple guilds
 - 🔊 Configurable volume controls, including optional ducking when people speak
 - ✍️ Written in TypeScript, easily extendable
@@ -202,6 +203,32 @@ Favorite names must contain 1–100 characters. `/favorites list` may shorten lo
 names and queries for display; the saved query is still used in full. Existing
 names longer than 100 characters can still be entered manually with
 `/favorites use` or `/favorites remove`.
+
+### Personal playlists
+
+Each user can build their own private playlists that Muse stores and plays back.
+Unlike favorites (which are a single saved query, shared across the server),
+playlists are a curated list of individual songs that belong to you and are
+private until you share them.
+
+Build and manage them with `/playlist`:
+
+- `/playlist create name:<name>` — make a new playlist
+- `/playlist add name:<name> song:<name or link>` — look up a song and add it
+  (pasting a YouTube/Spotify/SoundCloud playlist link adds all of its tracks)
+- `/playlist remove name:<name> song:<song>` — remove a song
+- `/playlist view name:<name>` — see the songs in a playlist
+- `/playlist list` — list your playlists and any shared with you
+- `/playlist play name:<name> [shuffle]` — queue the whole playlist
+- `/playlist rename` / `/playlist delete`
+
+Sharing is per person: `/playlist share name:<name> person:@user` lets that user
+play and view the playlist (read only — only the owner can edit it), and
+`/playlist unshare` revokes it. Playlist and song names autocomplete as you type.
+
+Playlists belong to your Discord account, so they follow you into any server the
+bot is in. A playlist holds up to 100 songs, and each user can keep up to 25
+playlists.
 
 ### Leaving voice when the queue ends
 

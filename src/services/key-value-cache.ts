@@ -7,6 +7,7 @@ type Seconds = number;
 type Options = {
   expiresIn: Seconds;
   key?: string;
+  shouldCache?: (result: any) => boolean;
 };
 
 const futureTimeToDate = (time: Seconds) => new Date(new Date().getTime() + (time * 1000));
@@ -23,6 +24,7 @@ export default class KeyValueCacheProvider {
     const {
       key = JSON.stringify(functionArgs),
       expiresIn,
+      shouldCache,
     } = options[options.length - 1] as Options;
 
     if (key.length < 4) {
@@ -48,6 +50,12 @@ export default class KeyValueCacheProvider {
     debug(`Cache miss: ${key}`);
 
     const result = await func(...options as any[]);
+
+    // Don't persist empty/failed lookups (e.g. a transient YouTube blip),
+    // so one bad response can't linger for the whole TTL.
+    if (shouldCache && !shouldCache(result)) {
+      return result;
+    }
 
     // Save result
     const value = JSON.stringify(result);

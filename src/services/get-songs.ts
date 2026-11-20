@@ -140,7 +140,10 @@ export default class {
     const count = Math.max(1, Math.min(this.config.SMART_QUEUE_SONG_COUNT, playlistLimit));
     const mix = await this.youtubeAPI.searchMany(query, count);
 
-    if (mix.length <= 1) {
+    // Use whatever real songs we found. Only fall back to the plain search
+    // (which can surface a single live stream or long compilation) when the
+    // genre mix is completely empty.
+    if (mix.length < 1) {
       return null;
     }
 

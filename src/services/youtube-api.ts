@@ -115,7 +115,7 @@ export default class {
 
     const minTrackLength = options.minTrackLength ?? 60;
     const maxTrackLength = options.maxTrackLength ?? 20 * 60;
-    const maxResults = Math.min(50, Math.max(count * 2, 15));
+    const maxResults = Math.min(50, Math.max(count * 4, 30));
 
     const ids = await this.searchVideoIDs(query, {videoCategoryId: '10', maxResults});
     if (ids.length === 0) {
@@ -390,6 +390,7 @@ export default class {
       params,
       {
         expiresIn: ONE_HOUR_IN_SECONDS,
+        shouldCache: (result: SearchResponse) => Array.isArray(result?.items) && result.items.length > 0,
       },
     );
 

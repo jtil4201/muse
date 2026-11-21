@@ -102,17 +102,38 @@ export default class implements Command {
 
   async execute(interaction: ChatInputCommandInteraction) {
     switch (interaction.options.getSubcommand()) {
-      case 'create': await this.create(interaction); break;
-      case 'add': await this.add(interaction); break;
-      case 'remove': await this.remove(interaction); break;
-      case 'play': await this.play(interaction); break;
-      case 'view': await this.view(interaction); break;
-      case 'list': await this.list(interaction); break;
-      case 'delete': await this.delete(interaction); break;
-      case 'rename': await this.rename(interaction); break;
-      case 'share': await this.share(interaction); break;
-      case 'unshare': await this.unshare(interaction); break;
-      default: throw new Error('unknown subcommand');
+      case 'create':
+        await this.create(interaction);
+        break;
+      case 'add':
+        await this.add(interaction);
+        break;
+      case 'remove':
+        await this.remove(interaction);
+        break;
+      case 'play':
+        await this.play(interaction);
+        break;
+      case 'view':
+        await this.view(interaction);
+        break;
+      case 'list':
+        await this.list(interaction);
+        break;
+      case 'delete':
+        await this.delete(interaction);
+        break;
+      case 'rename':
+        await this.rename(interaction);
+        break;
+      case 'share':
+        await this.share(interaction);
+        break;
+      case 'unshare':
+        await this.unshare(interaction);
+        break;
+      default:
+        throw new Error('unknown subcommand');
     }
   }
 

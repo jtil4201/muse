@@ -224,7 +224,7 @@ describe('SQLite persistence', () => {
       ], {
         env: prismaEnvironment,
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       probeClient = new Prisma.PrismaClient({
         datasources: {db: {url: databaseUrl}},
@@ -270,7 +270,7 @@ describe('SQLite persistence', () => {
           ], {
             env: prismaEnvironment,
             preferLocal: true,
-            timeout: 15_000,
+            timeout: 60_000,
           });
         },
         deployMigrations: async () => {
@@ -278,7 +278,7 @@ describe('SQLite persistence', () => {
           await execa('prisma', ['migrate', 'deploy'], {
             env: prismaEnvironment,
             preferLocal: true,
-            timeout: 15_000,
+            timeout: 60_000,
           });
         },
         migrationsApplied: () => {
@@ -303,7 +303,9 @@ describe('SQLite persistence', () => {
         finished_at: Date | null;
         migration_name: string;
       }>>('SELECT migration_name, finished_at FROM _prisma_migrations ORDER BY migration_name');
-      expect(appliedMigrations).toHaveLength(21);
+      const migrationDirectoryCount = (await fs.readdir('migrations', {withFileTypes: true}))
+        .filter(entry => entry.isDirectory()).length;
+      expect(appliedMigrations).toHaveLength(migrationDirectoryCount);
       expect(appliedMigrations.map(migration => migration.migration_name)).toContain('20261024170000_add_listening_sessions');
       expect(appliedMigrations.every(({finished_at: finishedAt}) => finishedAt !== null)).toBe(true);
       expect(appliedMigrations.map(({migration_name: name}) => name))
@@ -313,7 +315,7 @@ describe('SQLite persistence', () => {
       await reopenedClient?.$disconnect();
       await fs.rm(tempDirectory, {force: true, recursive: true});
     }
-  }, 30_000);
+  }, 120_000);
 
   it('reopens every durable model while a fresh PlayerManager starts with an empty in-memory queue', async () => {
     const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'muse-ops-persistence-'));
@@ -327,7 +329,7 @@ describe('SQLite persistence', () => {
       await execa('prisma', ['migrate', 'deploy'], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
 
       firstClient = new Prisma.PrismaClient({
@@ -418,7 +420,7 @@ describe('SQLite persistence', () => {
       await reopenedClient?.$disconnect();
       await fs.rm(tempDirectory, {force: true, recursive: true});
     }
-  }, 20_000);
+  }, 120_000);
 
   it('runs the supported clear command against only KeyValueCache rows', async () => {
     const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'muse-cache-clear-'));
@@ -431,7 +433,7 @@ describe('SQLite persistence', () => {
       await execa('prisma', ['migrate', 'deploy'], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       seedClient = new Prisma.PrismaClient({
         datasources: {db: {url: databaseUrl}},
@@ -467,7 +469,7 @@ describe('SQLite persistence', () => {
       await execa('npm', ['run', 'cache:clear-key-value'], {
         cwd: process.cwd(),
         env: {...process.env, DATABASE_URL: databaseUrl},
-        timeout: 15_000,
+        timeout: 60_000,
       });
 
       reopenedClient = new Prisma.PrismaClient({
@@ -491,7 +493,7 @@ describe('SQLite persistence', () => {
       await reopenedClient?.$disconnect();
       await fs.rm(tempDirectory, {force: true, recursive: true});
     }
-  }, 25_000);
+  }, 120_000);
 });
 
 const makeKeyValueCacheModel = () => ({

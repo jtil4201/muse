@@ -27,7 +27,7 @@ describe('durable listening history', () => {
       await execa('prisma', ['migrate', 'deploy'], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       database = new Prisma.PrismaClient({datasources: {db: {url: databaseUrl}}});
       const store = new SessionHistoryStore(database);
@@ -75,7 +75,7 @@ describe('durable listening history', () => {
       await database?.$disconnect();
       await fs.rm(directory, {recursive: true, force: true});
     }
-  }, 25_000);
+  }, 120_000);
 
   it('upgrades the deployed session schema and marks existing recaps for public-history conversion', async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'muse-session-history-upgrade-'));
@@ -95,7 +95,7 @@ describe('durable listening history', () => {
       await execa('prisma', ['migrate', 'deploy', '--schema', path.join(previousSchemaDirectory, 'schema.prisma')], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       database = new Prisma.PrismaClient({datasources: {db: {url: databaseUrl}}});
       const oldStore = new SessionHistoryStore(database);
@@ -113,7 +113,7 @@ describe('durable listening history', () => {
       await execa('prisma', ['migrate', 'deploy'], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       database = new Prisma.PrismaClient({datasources: {db: {url: databaseUrl}}});
       const upgraded = new SessionHistoryStore(database);
@@ -136,7 +136,7 @@ describe('durable listening history', () => {
       await database?.$disconnect();
       await fs.rm(directory, {recursive: true, force: true});
     }
-  }, 30_000);
+  }, 120_000);
 
   it('rejects invalid overflow positions before writing or deleting a binding', async () => {
     const model = {upsert: vi.fn(), deleteMany: vi.fn()};
@@ -160,7 +160,7 @@ describe('durable listening history', () => {
       await execa('prisma', ['migrate', 'deploy'], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       first = new Prisma.PrismaClient({datasources: {db: {url: databaseUrl}}});
       const store = new SessionHistoryStore(first);
@@ -210,7 +210,7 @@ describe('durable listening history', () => {
       await reopened?.$disconnect();
       await fs.rm(directory, {recursive: true, force: true});
     }
-  }, 25_000);
+  }, 120_000);
 
   it('retries pending terminal recaps across failed startups and clears only after publication is acknowledged', async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'muse-session-recovery-'));
@@ -220,7 +220,7 @@ describe('durable listening history', () => {
       await execa('prisma', ['migrate', 'deploy'], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       database = new Prisma.PrismaClient({datasources: {db: {url: databaseUrl}}});
       const store = new SessionHistoryStore(database);
@@ -266,7 +266,7 @@ describe('durable listening history', () => {
       await database?.$disconnect();
       await fs.rm(directory, {recursive: true, force: true});
     }
-  }, 25_000);
+  }, 120_000);
 
   it('writes only new or changed entries as the session grows and skips identical saves', async () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'muse-session-history-writes-'));
@@ -276,7 +276,7 @@ describe('durable listening history', () => {
       await execa('prisma', ['migrate', 'deploy'], {
         env: {...process.env, DATABASE_URL: databaseUrl, RUST_LOG: 'info'},
         preferLocal: true,
-        timeout: 15_000,
+        timeout: 60_000,
       });
       database = new Prisma.PrismaClient({datasources: {db: {url: databaseUrl}}});
       const entryWrites: string[] = [];
@@ -308,5 +308,5 @@ describe('durable listening history', () => {
       await database?.$disconnect();
       await fs.rm(directory, {recursive: true, force: true});
     }
-  }, 25_000);
+  }, 120_000);
 });

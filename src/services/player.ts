@@ -1492,13 +1492,12 @@ export default class {
       // which is correct for skip semantics but wrong as an end-of-queue test.)
       const hasNextSong = this.queuePosition + 1 < this.queue.length;
       if (!hasNextSong) {
-        const didAutoplay = await this.tryAutoplay();
-        if (!didAutoplay) {
-          await this.finishQueue();
-          return;
-        }
+        await this.tryAutoplay();
       }
 
+      // Advance past the finished song even when autoplay found nothing, so the
+      // queue reads as exhausted. forward() finishes an empty queue, and a song
+      // added after the gap becomes current instead of replaying the last one.
       await this.forward(1);
       const currentSong = this.getCurrent();
       if (!currentSong) {

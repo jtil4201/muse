@@ -53,6 +53,7 @@ vi.mock('../src/utils/get-guild-settings.js', () => ({
 import Config from '../src/commands/config.js';
 import handleVoiceStateUpdate from '../src/events/voice-state-update.js';
 import Player, {MediaSource, QueuedSong, STATUS} from '../src/services/player.js';
+import {EMPTY_CHANNEL_LEAVE_GRACE_SECONDS} from '../src/utils/constants.js';
 
 const GUILD_ID = 'guild-id';
 const VOICE_CHANNEL_ID = 'voice-channel-id';
@@ -132,6 +133,8 @@ const installVoiceEventPlayer = () => {
   const voiceConnection = makeVoiceConnection();
   const player = {
     disconnect: vi.fn(),
+    handleEmptyVoiceChannel: vi.fn(),
+    handleVoiceChannelRepopulated: vi.fn(),
     getQueue: () => queue,
     guildId: GUILD_ID,
     voiceConnection,
@@ -246,7 +249,7 @@ describe('queue exhaustion disconnect delay', () => {
 });
 
 describe('voice-state listener departure behavior', () => {
-  it('disconnects from a bots-only configured channel when enabled without clearing the queue', async () => {
+  it('leaves a bots-only configured channel after the grace period without clearing the queue', async () => {
     const player = new Player({} as never, GUILD_ID);
     const voiceConnection = makeVoiceConnection();
     const current = makeSong();
@@ -261,13 +264,19 @@ describe('voice-state listener departure behavior', () => {
 
     await handleVoiceStateUpdate(oldState, newState);
 
+    // Grace period: don't drop a brief disconnect, wait before leaving.
+    expect(voiceConnection.destroy).not.toHaveBeenCalled();
+    expect(player.voiceConnection).toBe(voiceConnection);
+
+    await vi.advanceTimersByTimeAsync(EMPTY_CHANNEL_LEAVE_GRACE_SECONDS * 1000);
+
     expect(voiceConnection.destroy).toHaveBeenCalledOnce();
     expect(player.voiceConnection).toBeNull();
     expect(player.getCurrent()).toBe(current);
     expect(player.getQueue()).toEqual([upcoming]);
   });
 
-  it('stays connected when at least one human listener remains', async () => {
+  it('stays connected and cancels any pending leave when a human listener remains', async () => {
     const {player} = installVoiceEventPlayer();
     const members = makeMembers(true, false);
 
@@ -277,6 +286,7 @@ describe('voice-state listener departure behavior', () => {
     );
 
     expect(player.disconnect).not.toHaveBeenCalled();
+    expect(player.handleVoiceChannelRepopulated).toHaveBeenCalledOnce();
   });
 
   it('stays connected to a bots-only channel when the setting is disabled', async () => {

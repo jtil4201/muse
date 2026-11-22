@@ -27,6 +27,14 @@ const normalizeTitleKey = (title: string): string => title
   .replace(/[^a-z0-9]+/g, ' ')
   .trim();
 
+// Non-Latin scripts (Hangul, CJK, Kana, Cyrillic, Greek, Arabic, Hebrew, Thai,
+// Devanagari) reliably aren't English, so a title using them is dropped from
+// English genre mixes.
+const NON_LATIN_SCRIPT_PATTERN = /[Ͱ-ϿЀ-ӿ֐-׿؀-ۿ฀-๿ऀ-ॿ぀-ヿ㐀-鿿가-힯]/;
+// Latin-script foreign markers (Spanish/Portuguese/French) that share the
+// alphabet with English; heuristic, so it targets distinctive words only.
+const FOREIGN_TITLE_PATTERN = /\b(a[nñ]os?|canciones|m[uú]sicas?|[eé]xitos|sucessos|grandes [eé]xitos|d[eé]cada|baladas|rom[aá]nticas|recuerdos|lo mejor|(las|los) mejores|rock en espa[nñ]ol|chansons|meilleures)\b/i;
+
 interface VideoDetailsResponse {
   id: string;
   contentDetails: {
@@ -133,7 +141,7 @@ export default class {
     const maxTrackLength = options.maxTrackLength ?? 10 * 60;
     const maxResults = Math.min(50, Math.max(count * 4, 30));
 
-    const ids = await this.searchVideoIDs(query, {videoCategoryId: '10', maxResults});
+    const ids = await this.searchVideoIDs(query, {videoCategoryId: '10', maxResults, relevanceLanguage: 'en'});
     if (ids.length === 0) {
       return [];
     }
@@ -159,6 +167,10 @@ export default class {
       }
 
       if (NON_SONG_TITLE_PATTERN.test(song.title)) {
+        continue;
+      }
+
+      if (NON_LATIN_SCRIPT_PATTERN.test(song.title) || FOREIGN_TITLE_PATTERN.test(song.title)) {
         continue;
       }
 
@@ -399,7 +411,7 @@ export default class {
     return chapters;
   }
 
-  private async searchVideoIDs(query: string, options: {videoCategoryId?: string; maxResults?: number} = {}): Promise<string[]> {
+  private async searchVideoIDs(query: string, options: {videoCategoryId?: string; maxResults?: number; relevanceLanguage?: string} = {}): Promise<string[]> {
     const searchParams: Record<string, string> = {
       part: 'snippet',
       q: query,
@@ -409,6 +421,10 @@ export default class {
 
     if (options.videoCategoryId) {
       searchParams.videoCategoryId = options.videoCategoryId;
+    }
+
+    if (options.relevanceLanguage) {
+      searchParams.relevanceLanguage = options.relevanceLanguage;
     }
 
     const params = {searchParams};

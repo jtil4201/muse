@@ -11,10 +11,11 @@ import {parseTime} from '../utils/time.js';
 import getYouTubeID from 'get-youtube-id';
 import {buildAudioFallbackQuery, rankAudioFallbackCandidates} from '../utils/youtube-audio-fallback.js';
 
-// Genre/mood searches in the Music category surface "guess the song" quiz and
-// trivia compilations that pass the length/live filters but aren't real tracks.
-// Drop anything whose title reads like a quiz so the mix stays actual songs.
-const TRIVIA_TITLE_PATTERN = /\b(guess the (song|artist|intro|lyric|lyrics|year|band|tune|movie|album)|name that (tune|song|artist)|(music|song|lyric|lyrics|audio|movie) quiz|finish the (lyric|lyrics|line)|can you (name|guess|remember)|how well do you know|emoji (song|challenge|game)|trivia)\b/i;
+// Genre/mood searches in the Music category surface quiz, trivia, and
+// "top 10 / one-hit wonders" countdown compilations that pass the length/live
+// filters but aren't real tracks. Drop anything whose title reads like a quiz
+// or a listicle/compilation so the mix stays actual songs.
+const NON_SONG_TITLE_PATTERN = /\b(guess the (song|artist|intro|lyric|lyrics|year|band|tune|movie|album)|name that (tune|song|artist)|(music|song|lyric|lyrics|audio|movie) quiz|finish the (lyric|lyrics|line)|can you (name|guess|remember)|how well do you know|emoji (song|challenge|game)|trivia|one.?hit wonders|you need to hear|you'?ve never heard|you forgot about|greatest hits|best of|mega.?mix|non.?stop|compilation|playlist|countdown|top \d{1,3}|\d{1,3} (best|greatest|forgotten|essential|iconic|classic|underrated|most|biggest|famous|legendary|unforgettable|songs|hits|tracks))\b/i;
 
 interface VideoDetailsResponse {
   id: string;
@@ -119,7 +120,7 @@ export default class {
     }
 
     const minTrackLength = options.minTrackLength ?? 60;
-    const maxTrackLength = options.maxTrackLength ?? 20 * 60;
+    const maxTrackLength = options.maxTrackLength ?? 10 * 60;
     const maxResults = Math.min(50, Math.max(count * 4, 30));
 
     const ids = await this.searchVideoIDs(query, {videoCategoryId: '10', maxResults});
@@ -146,7 +147,7 @@ export default class {
         continue;
       }
 
-      if (TRIVIA_TITLE_PATTERN.test(song.title)) {
+      if (NON_SONG_TITLE_PATTERN.test(song.title)) {
         continue;
       }
 

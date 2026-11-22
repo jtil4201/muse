@@ -11,6 +11,11 @@ import {parseTime} from '../utils/time.js';
 import getYouTubeID from 'get-youtube-id';
 import {buildAudioFallbackQuery, rankAudioFallbackCandidates} from '../utils/youtube-audio-fallback.js';
 
+// Genre/mood searches in the Music category surface "guess the song" quiz and
+// trivia compilations that pass the length/live filters but aren't real tracks.
+// Drop anything whose title reads like a quiz so the mix stays actual songs.
+const TRIVIA_TITLE_PATTERN = /\b(guess the (song|artist|intro|lyric|lyrics|year|band|tune|movie|album)|name that (tune|song|artist)|(music|song|lyric|lyrics|audio|movie) quiz|finish the (lyric|lyrics|line)|can you (name|guess|remember)|how well do you know|emoji (song|challenge|game)|trivia)\b/i;
+
 interface VideoDetailsResponse {
   id: string;
   contentDetails: {
@@ -138,6 +143,10 @@ export default class {
 
       const [song] = this.getMetadataFromVideo({video, shouldSplitChapters: false});
       if (!song || song.length < minTrackLength || song.length > maxTrackLength) {
+        continue;
+      }
+
+      if (TRIVIA_TITLE_PATTERN.test(song.title)) {
         continue;
       }
 

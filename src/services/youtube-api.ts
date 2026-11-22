@@ -17,6 +17,16 @@ import {buildAudioFallbackQuery, rankAudioFallbackCandidates} from '../utils/you
 // or a listicle/compilation so the mix stays actual songs.
 const NON_SONG_TITLE_PATTERN = /\b(guess the (song|artist|intro|lyric|lyrics|year|band|tune|movie|album)|name that (tune|song|artist)|(music|song|lyric|lyrics|audio|movie) quiz|finish the (lyric|lyrics|line)|can you (name|guess|remember)|how well do you know|emoji (song|challenge|game)|trivia|one.?hit wonders|you need to hear|you'?ve never heard|you forgot about|greatest hits|best of|mega.?mix|non.?stop|compilation|playlist|countdown|top \d{1,3}|\d{1,3} (best|greatest|forgotten|essential|iconic|classic|underrated|most|biggest|famous|legendary|unforgettable|songs|hits|tracks))\b/i;
 
+// Collapses different uploads of the same song ("Official Video" vs "Official
+// Music Video", punctuation/case differences) to one key so a mix doesn't queue
+// the same track twice from separate video IDs.
+const normalizeTitleKey = (title: string): string => title
+  .toLowerCase()
+  .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+  .replace(/\b(official|music|video|audio|lyric|lyrics|hd|hq|4k|remaster|remastered|explicit|visualizer|mv|full|version)\b/g, ' ')
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+
 interface VideoDetailsResponse {
   id: string;
   contentDetails: {
@@ -132,6 +142,7 @@ export default class {
     const byId = new Map(videos.map(video => [video.id, video]));
 
     const songs: SongMetadata[] = [];
+    const seenTitles = new Set<string>();
     for (const id of ids) {
       const video = byId.get(id);
       if (!video || video.snippet.liveBroadcastContent === 'live') {
@@ -151,6 +162,12 @@ export default class {
         continue;
       }
 
+      const titleKey = normalizeTitleKey(song.title);
+      if (titleKey && seenTitles.has(titleKey)) {
+        continue;
+      }
+
+      seenTitles.add(titleKey);
       songs.push(song);
       if (songs.length >= count) {
         break;

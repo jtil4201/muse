@@ -1,21 +1,49 @@
-import {ChannelType, MessageFlags, PermissionFlagsBits, type ButtonInteraction, type Client, type GuildTextBasedChannel, type Message} from 'discord.js';
+import {ChannelType, MessageFlags, PermissionFlagsBits, type ButtonInteraction, type Client, type GuildTextBasedChannel, type Message, type StringSelectMenuInteraction} from 'discord.js';
 import {inject, injectable} from 'inversify';
 import {Routes} from 'discord-api-types/v10';
 import {TYPES} from '../types.js';
 import PlayerManager from '../managers/player.js';
 import type Player from './player.js';
-import {STATUS} from './player-types.js';
+import {STATUS, type SongMetadata, type QueuedSong} from './player-types.js';
 import type {ListeningSessionRecord} from './listening-session.js';
 import SessionHistoryStore from './session-history-store.js';
 import SessionHistoryPublisher from './session-history-publisher.js';
 import canUsePlaybackCommand from '../utils/can-use-playback-command.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildHistoryMessages, buildMoreMessage, buildQueueMessage, buildSessionMessage, buildSessionMessages, SESSION_BUTTON_PREFIX} from '../utils/build-session-message.js';
+import {prisma} from '../utils/db.js';
+import {truncate} from '../utils/string.js';
+import {randomUUID} from 'node:crypto';
 
 const isMissingMessage = (error: unknown): boolean => Boolean(error && typeof error === 'object' && 'code' in error && error.code === 10008);
 const playbackCommands: Record<string, string> = {
   previous: 'unskip', next: 'next', pause: 'pause', resume: 'resume', backward: 'seek', forward: 'fseek', shuffle: 'shuffle', stop: 'stop',
 };
+
+// Save-to-playlist flow (Add button). Select-menu custom ids share this prefix.
+const SESSION_SELECT_PREFIX = 'muse-select:';
+const MAX_PLAYLIST_SONGS = 100;
+const PENDING_ADD_TTL = 10 * 60 * 1000;
+// Carries the chosen song between the song-pick and playlist-pick select menus
+// so a shifting queue can't swap the target out from under the user.
+const pendingAdds = new Map<string, {song: SongMetadata; userId: string; createdAt: number}>();
+const prunePendingAdds = () => {
+  const now = Date.now();
+  for (const [token, entry] of pendingAdds) {
+    if (now - entry.createdAt > PENDING_ADD_TTL) {
+      pendingAdds.delete(token);
+    }
+  }
+};
+
+// Raw string-select action row, matching the raw-object button components the
+// rest of this file uses (editReply here rejects discord.js builder instances).
+type SelectOption = {label: string; value: string; description?: string};
+type SelectRow = {type: 1; components: Array<{type: 3; custom_id: string; placeholder: string; options: SelectOption[]}>};
+const selectRow = (customId: string, placeholder: string, options: SelectOption[]): SelectRow => ({
+  type: 1,
+  components: [{type: 3, custom_id: customId, placeholder, options}],
+});
 
 @injectable()
 export default class SessionPlayer {
@@ -272,7 +300,7 @@ export default class SessionPlayer {
     const [sessionId, action, rawPage] = parts;
     const page = Number(rawPage);
     if (parts.length !== 3 || !/^[\da-f-]{36}$/i.test(sessionId) || !Number.isSafeInteger(page) || page < 0
-      || !interaction.guild || !['history', 'queue', 'more', ...Object.keys(playbackCommands)].includes(action)) {
+      || !interaction.guild || !['history', 'queue', 'more', 'add', ...Object.keys(playbackCommands)].includes(action)) {
       await interaction.editReply('This player control is no longer available.');
       return;
     }
@@ -320,7 +348,133 @@ export default class SessionPlayer {
       return;
     }
 
+    if (action === 'add') {
+      if (!player.getCurrent()) {
+        await interaction.editReply('Nothing is playing to add.');
+        return;
+      }
+
+      await interaction.editReply(this.buildSongPicker(session.id, player));
+      return;
+    }
+
     await this.handleTransportButton(interaction, session, action);
+  }
+
+  // Save-to-playlist flow: Add button -> pick a queued song -> pick a playlist.
+  public async handleSelectMenu(interaction: StringSelectMenuInteraction): Promise<void> {
+    if (!interaction.customId.startsWith(SESSION_SELECT_PREFIX) || !interaction.guild) {
+      return;
+    }
+
+    const [sessionId, step, token] = interaction.customId.slice(SESSION_SELECT_PREFIX.length).split(':');
+    if (!/^[\da-f-]{36}$/i.test(sessionId)) {
+      return;
+    }
+
+    await interaction.deferUpdate();
+
+    if (step === 'song') {
+      await this.handleSongPicked(interaction, sessionId);
+    } else if (step === 'pl') {
+      await this.handlePlaylistPicked(interaction, token);
+    }
+  }
+
+  private buildSongPicker(sessionId: string, player: Player) {
+    const songs = [player.getCurrent(), ...player.getQueue()].filter((song): song is QueuedSong => song !== null);
+    const options = songs.slice(0, 25).map((song, index) => ({
+      label: truncate(song.title || 'Untitled track', 100),
+      description: song.artist ? truncate(song.artist, 100) : undefined,
+      value: String(index),
+    }));
+    return {
+      content: 'Which song do you want to save to a playlist?',
+      embeds: [],
+      components: [selectRow(`${SESSION_SELECT_PREFIX}${sessionId}:song`, 'Pick a song to save', options)],
+      allowedMentions: {parse: []},
+    };
+  }
+
+  private async handleSongPicked(interaction: StringSelectMenuInteraction, sessionId: string): Promise<void> {
+    const player = this.playerManager.getExisting(interaction.guild!.id);
+    const current = player?.getCurrent();
+    if (!player || !current) {
+      await interaction.editReply({content: 'The queue is no longer active.', embeds: [], components: []});
+      return;
+    }
+
+    const songs: SongMetadata[] = [current, ...player.getQueue()];
+    const index = Number(interaction.values[0]);
+    const song = Number.isInteger(index) ? songs[index] : undefined;
+    if (!song) {
+      await interaction.editReply({content: 'That song is no longer in the queue.', embeds: [], components: []});
+      return;
+    }
+
+    const playlists = await prisma.playlist.findMany({where: {ownerId: interaction.user.id}, orderBy: {name: 'asc'}});
+    if (playlists.length === 0) {
+      await interaction.editReply({content: 'You have no playlists yet. Create one with `/playlist create`, then try again.', embeds: [], components: []});
+      return;
+    }
+
+    if (playlists.length === 1) {
+      const result = await this.addSongToPlaylist(interaction.user.id, playlists[0].id, song);
+      await interaction.editReply({content: result, embeds: [], components: []});
+      return;
+    }
+
+    prunePendingAdds();
+    const token = randomUUID().slice(0, 8);
+    pendingAdds.set(token, {song, userId: interaction.user.id, createdAt: Date.now()});
+
+    const options = playlists.slice(0, 25).map(playlist => ({label: truncate(playlist.name, 100), value: String(playlist.id)}));
+    await interaction.editReply({
+      content: `Add **${truncate(song.title, 100)}** to which playlist?`,
+      embeds: [],
+      components: [selectRow(`${SESSION_SELECT_PREFIX}${sessionId}:pl:${token}`, 'Pick a playlist', options)],
+    });
+  }
+
+  private async handlePlaylistPicked(interaction: StringSelectMenuInteraction, token: string): Promise<void> {
+    prunePendingAdds();
+    const pending = token ? pendingAdds.get(token) : undefined;
+    if (!pending || pending.userId !== interaction.user.id) {
+      await interaction.editReply({content: 'That request expired — hit **Add** again.', embeds: [], components: []});
+      return;
+    }
+
+    pendingAdds.delete(token);
+    const result = await this.addSongToPlaylist(interaction.user.id, Number(interaction.values[0]), pending.song);
+    await interaction.editReply({content: result, embeds: [], components: []});
+  }
+
+  private async addSongToPlaylist(userId: string, playlistId: number, song: SongMetadata): Promise<string> {
+    const playlist = await prisma.playlist.findFirst({where: {id: playlistId, ownerId: userId}});
+    if (!playlist) {
+      return 'That playlist is not available.';
+    }
+
+    const count = await prisma.playlistSong.count({where: {playlistId: playlist.id}});
+    if (count >= MAX_PLAYLIST_SONGS) {
+      return `**${truncate(playlist.name, 100)}** is full (max ${MAX_PLAYLIST_SONGS} songs).`;
+    }
+
+    await prisma.playlistSong.create({
+      data: {
+        playlistId: playlist.id,
+        position: count,
+        title: song.title,
+        artist: song.artist ?? '',
+        url: song.url,
+        source: song.source,
+        length: song.length ?? 0,
+        thumbnail: song.thumbnailUrl ?? null,
+        query: song.title,
+      },
+    });
+
+    return `👍 added **${truncate(song.title, 100)}** to **${truncate(playlist.name, 100)}**`;
   }
 
   private async handleTransportButton(interaction: ButtonInteraction, session: ListeningSessionRecord, action: string): Promise<void> {

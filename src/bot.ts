@@ -118,6 +118,8 @@ export default class {
           if (command.handleButtonInteraction) {
             await command.handleButtonInteraction(interaction);
           }
+        } else if (interaction.isStringSelectMenu()) {
+          await container.get<SessionPlayer>(TYPES.Services.SessionPlayer).handleSelectMenu(interaction);
         } else if (interaction.isAutocomplete()) {
           const command = this.commandsByName.get(interaction.commandName);
 

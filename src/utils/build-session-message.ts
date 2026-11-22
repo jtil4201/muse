@@ -133,6 +133,7 @@ export const buildSessionMessages = (session: ListeningSessionRecord, player?: P
     components.push(row(
       button(session, 'queue', 'Queue'),
       button(session, 'shuffle', 'Shuffle', {disabled: player.isQueueEmpty()}),
+      button(session, 'add', 'Add'),
     ));
   }
 

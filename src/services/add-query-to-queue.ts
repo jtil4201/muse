@@ -2,6 +2,7 @@ import {ChatInputCommandInteraction, GuildMember, GuildTextBasedChannel, escapeM
 import {inject, injectable} from 'inversify';
 import shuffle from 'array-shuffle';
 import uniqueSongs from '../utils/unique-songs.js';
+import {truncate} from '../utils/string.js';
 import {TYPES} from '../types.js';
 import GetSongs from '../services/get-songs.js';
 import {MediaSource, SongMetadata, STATUS} from './player.js';
@@ -143,11 +144,18 @@ export default class AddQueryToQueue {
     }
 
     const title = escapeMarkdown(firstSong.title);
+    const listCap = 12;
+    const songList = newSongs
+      .slice(0, listCap)
+      .map((song, index) => `\`${index + 1}.\` ${escapeMarkdown(truncate(song.title, 80))}`)
+      .join('\n');
+    const remainingCount = newSongs.length - listCap;
+    const listBlock = `${songList}${remainingCount > 0 ? `\n…and ${remainingCount} more` : ''}`;
     const responseContent = (publicationWarning = '') => {
       const suffix = `${didSkipCurrentTrack ? ' and current track skipped' : ''}${extraMsg}${publicationWarning}`;
       return newSongs.length === 1
         ? formatSongReply(title, 'u betcha, **', `** added to the${addToFrontOfQueue ? ' front of the' : ''} queue${suffix}`)
-        : formatSongReply(title, 'u betcha, **', `** and ${newSongs.length - 1} other songs were added to the queue${suffix}`);
+        : `u betcha, added **${newSongs.length}** songs to the queue${suffix}:\n${listBlock}`;
     };
 
     const receipt = interaction.editReply({content: responseContent(), allowedMentions: {parse: []}});
